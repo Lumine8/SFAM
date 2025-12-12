@@ -1,3 +1,6 @@
+<p align="center">
+  <img src="SFAM.png" alt="SFAM Logo" width="180"/>
+</p>
 
 # 🔐 SFAM-ADR: Secure Feature Abstraction Model
 
