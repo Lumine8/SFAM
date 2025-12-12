@@ -1,35 +1,39 @@
-# 🛡️ SecuADR: Secure Adaptive Dynamic Recognition
-> **A Neuro-Symbolic Behavioral Biometric Engine powered by SFAM.**
+# 🔐 SFAM: Secure Feature Abstraction Model
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue)](https://www.python.org/)
-[![Pytorch](https://img.shields.io/badge/PyTorch-2.0%2B-red)](https://pytorch.org/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.0%2B-red)](https://pytorch.org/)
 
-**SecuADR** is a next-generation authentication framework that replaces static passwords with **dynamic behavioral biometrics**. Unlike traditional pattern locks, SecuADR analyzes the *physics* of your movement—velocity, acceleration, and tortuosity—to create a unique, unforgeable digital signature.
+**SFAM** is a modality-agnostic, privacy-preserving feature abstraction framework. It is designed to transform raw multimodal data (images, time-series, audio) into **irreversible, cancellable biometric hashes**.
 
-Under the hood, it uses **SFAM (Secure Feature Abstraction Model)** to convert these biometric inputs into irreversible, privacy-preserving hashes.
+This repository contains the core SFAM architecture and a reference implementation applied to **Behavioral Biometrics** (codenamed *SecuADR*), which secures user identity using dynamic mouse/touch physics.
 
 ---
 
-## 🚀 Key Features
+## 🏗️ The SFAM Architecture
 
-### 🧠 Neuro-Symbolic Architecture
-* **Spatial Path:** Uses **GhostNet (1.0x)** to analyze the geometric shape of the drawing.
-* **Behavioral Path:** Uses a custom **Physics MLP** to analyze temporal dynamics (speed, jitter, rhythm).
+SFAM is not just a classifier; it is a security layer that sits between raw data and authentication logic.
 
-### 🔒 Privacy-First (Cancellable Biometrics)
-* **Irreversible Abstraction:** Your raw biometric data is never stored.
-* **Revocability:** If your hash is stolen, we simply rotate the security seed. The old hash becomes useless, and a new one is generated from the *same* hand gesture.
+### 1. Modality-Agnostic Encoders
+SFAM uses swappable backbones depending on the input data:
+* **Spatial Path:** Uses **GhostNet** (Lightweight CNN) for visual patterns.
+* **Temporal/Physics Path:** Uses **Differential MLP** for time-series dynamics (velocity, acceleration, jitter).
 
-### 🛡️ Anti-Spoofing
-* **Log-Space Velocity Analysis:** Distinguishes between human micro-movements and robotic/replay attacks.
-* **Tortuosity Checks:** Ensures the complexity of the path matches human efficiency.
+### 2. Irreversible Abstraction (BioHashing)
+Instead of storing user feature vectors (which can be stolen and reversed), SFAM projects features into a high-dimensional orthogonal space using a user-specific **Seed Key**.
+* **Result:** A binary hash (e.g., `10110...`) that is mathematically impossible to reverse into the original face/gesture.
+
+### 3. Cancellable Biometrics
+If a database is breached, the user's raw biometrics are safe. The system simply:
+1.  **Revokes** the old Seed Key.
+2.  **Issues** a new Seed Key.
+3.  **Regenerates** a completely new hash from the *same* physical biometric.
 
 ---
 
 ## 📦 Installation
 
-Clone the repository and install the package in editable mode:
+Clone the repository and install the package:
 
 ```bash
 git clone [https://github.com/Lumine8/SFAM.git](https://github.com/Lumine8/SFAM.git)
