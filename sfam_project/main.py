@@ -1,5 +1,5 @@
 import torch
-from data.synthetic_data import SyntheticBiometricDataset
+from sfam.data.synthetic_data import SyntheticBiometricDataset
 from training.train import train_sfam
 from eval.evaluate import run_evaluation
 

@@ -7,8 +7,9 @@ import numpy as np
 import os
 
 # IMPORT YOUR MODULAR ENGINE
-from models.sfam_net import SFAM
-from data.gesture_loader import GestureCapture
+# We now import from the 'sfam' package folder
+from sfam.models.sfam_net import SFAM
+from sfam.data.gesture_loader import GestureCapture
 
 # --- SETUP ---
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -97,5 +98,6 @@ async def verify_user(req: AuthRequest):
         return {"auth": False, "score": dist, "message": "Access Denied"}
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000)) 
+    # Get the PORT environment variable, default to 8000 for local testing
+    port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)

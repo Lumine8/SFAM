@@ -1,6 +1,6 @@
 fastapi
 uvicorn
-# Force CPU versions to save space and avoid OOM crashes
+# CPU-only PyTorch (Crucial for Render/HuggingFace Free Tier)
 torch --index-url https://download.pytorch.org/whl/cpu
 torchvision --index-url https://download.pytorch.org/whl/cpu
 numpy
