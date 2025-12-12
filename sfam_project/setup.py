@@ -1,10 +1,10 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="sfam",
+    name="sfam-ADR",
     version="1.0.0",
     description="Secure Feature Abstraction Model (SFAM) & SecuADR Engine",
-    author="Your Name",
+    author="lumine8",
     packages=find_packages(),
     install_requires=[
         "torch>=2.0.0",
