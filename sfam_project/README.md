@@ -1,6 +1,5 @@
-<p align="center">
-  <img src="SFAM.png" alt="SFAM Logo" width="180"/>
-</p>
+
+![SFAM Logo](https://raw.githubusercontent.com/Lumine8/SFAM/main/SFAM.png)
 
 # 🔐 SFAM-ADR: Secure Feature Abstraction Model
 
