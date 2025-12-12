@@ -1,4 +1,9 @@
-torch>=2.0.0
+fastapi
+uvicorn
+torch --index-url https://download.pytorch.org/whl/cpu
 numpy
-matplotlib
-scikit-learn
+timm
+pillow
+torchvision --index-url https://download.pytorch.org/whl/cpu
+opencv-python-headless
+pydantic
