@@ -7,7 +7,7 @@ long_description = (this_directory / "README.md").read_text(encoding="utf-8")
 
 setup(
     name="sfam-ADR",
-    version="1.0.0",
+    version="1.0.2",
     description="Secure Feature Abstraction Model (SFAM) & SecuADR Engine",
     
     # ⚠️ THIS MAKES YOUR PYPI PAGE LOOK GOOD
