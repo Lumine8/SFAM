@@ -1,5 +1,8 @@
-# This makes the folder a Python Package
-# We expose the main classes so you can do: 'from sfam import SFAM'
-
+# 1. Expose the Core Engine
 from .models.sfam_net import SFAM
-from .data.gesture_loader import GestureCapture
+
+# 2. Expose the Feature Managers (This allows 'from sfam import image_fm')
+from .modalities import image_fm
+from .modalities import gesture_fm
+
+__version__ = "1.1.0"
