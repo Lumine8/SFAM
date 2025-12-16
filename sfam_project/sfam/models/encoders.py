@@ -39,16 +39,25 @@ class ImageEncoder(nn.Module):
 
 # --- 2. TEMPORAL ENCODER (Voice, Mouse Gestures) ---
 class AudioEncoder(nn.Module):
-    def __init__(self, embedding_dim=128):
+    # Added 'input_channels' argument so you can pass 64, 1, or 2
+    def __init__(self, embedding_dim=128, input_channels=1): 
         super().__init__()
-        # Standard LSTM for time-series data
-        self.lstm = nn.LSTM(input_size=1, hidden_size=64, num_layers=2, batch_first=True)
+        # input_channels: 1 for raw audio, 2 for (x,y) mouse, 64 for features
+        self.lstm = nn.LSTM(input_size=input_channels, hidden_size=64, num_layers=2, batch_first=True)
         self.fc = nn.Linear(64, embedding_dim)
 
     def forward(self, x):
-        # x: [Batch, Sequence_Length, 1]
+        # x shape: [Batch, Sequence_Length, input_channels]
+        # Ensure input is float32
+        if x.dtype != torch.float32:
+            x = x.float()
+            
+        # If input is [Batch, Seq], unsqueeze to [Batch, Seq, 1]
+        if x.dim() == 2:
+            x = x.unsqueeze(-1)
+            
         _, (h_n, _) = self.lstm(x)
-        return self.fc(h_n[-1]) # Take the last hidden state
+        return self.fc(h_n[-1])
 
 
 # --- 3. SYMBOLIC ENCODER (Text, Passwords) ---
