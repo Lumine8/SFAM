@@ -2,33 +2,44 @@ import torch
 import torch.nn as nn
 import timm
 
-class ImageEncoder(nn.Module):
+# 1. Import the module where SFAM lives
+import sfam.models.sfam_net 
+from sfam import SFAM, image_fm, gesture_fm 
+
+# 2. Define the FIXED Encoder locally (Correcting the Flatten/Pooling issue)
+class FixedImageEncoder(nn.Module):
     def __init__(self, embedding_dim=128):
         super().__init__()
-        # 1. Load backbone but FORCE it to pool the output
-        # global_pool='avg' turns the 7x7 grid into a 1x1 vector automatically
+        # FIX: global_pool='avg' forces the 7x7 grid into a 1x1 vector
         self.backbone = timm.create_model(
             'ghostnet_100', 
             pretrained=True, 
-            num_classes=0,       # No classification layer
-            global_pool='avg'    # <--- VITAL: Averages spatial dims to 1x1
+            num_classes=0, 
+            global_pool='avg' 
         )
-        
-        # Get the output channels (usually 1280 for GhostNet, 2048 for ResNet)
         num_features = self.backbone.num_features
         
-        # 2. Project to your embedding dimension
+        # Now the input size matches the linear layer
         self.project = nn.Sequential(
             nn.Flatten(),
             nn.Linear(num_features, embedding_dim),
-            nn.LayerNorm(embedding_dim), # Good practice for stability
+            nn.LayerNorm(embedding_dim),
             nn.ReLU()
         )
 
     def forward(self, x):
-        # x shape: [Batch, 3, 224, 224]
-        features = self.backbone(x) 
-        # features shape is now [Batch, num_features] (e.g., [1, 1280])
-        
-        out = self.project(features)
-        return out
+        return self.project(self.backbone(x))
+
+# 3. 💪 FORCE PATCH: Overwrite the class inside 'sfam_net'
+# This ensures that when SFAM() is called, it uses OUR class, not the old one.
+sfam.models.sfam_net.ImageEncoder = FixedImageEncoder
+print("✅ Patched ImageEncoder inside sfam_net!")
+
+# 4. Initialize the Engine
+device = "cpu"
+model = SFAM(
+    embedding_dim=64, 
+    secure_dim=256
+).to(device).eval()
+
+print(f"🚀 SFAM Engine loaded on {device} (with Hot Fix)")
