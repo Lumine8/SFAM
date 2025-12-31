@@ -13,20 +13,30 @@ class IAM_Module(nn.Module):
         
     def forward(self, fused_features, user_seed, training=False):
         """
-        fused_features: [batch, dim]
+        fused_features: [batch, dim] 
         user_seed: int (The revokable key)
-        training: bool (If True, use Tanh for gradients. If False, use Sign for bits)
         """
+        device = fused_features.device
+        
+        # 🛑 FIX: Use a Local Generator
+        # This creates randomness ONLY for this specific matrix,
+        # leaving the global PyTorch training random state untouched.
+        gen = torch.Generator(device=device)
+        gen.manual_seed(int(user_seed)) 
+        
         # 1. Generate User-Specific Projection Matrix
-        # Note: We use the seed to deterministically create the matrix on the fly
-        torch.manual_seed(user_seed) 
-        projection = torch.randn(self.input_dim, self.output_dim).to(fused_features.device)
+        # We don't need gradients for the random matrix itself (it's fixed per user)
+        with torch.no_grad():
+            projection = torch.randn(self.input_dim, self.output_dim, generator=gen, device=device)
         
         # 2. Project
+        # [1, 128] x [128, 256] -> [1, 256]
         projected = torch.matmul(fused_features, projection)
         
-        # 3. Non-Linearity
+        # 3. Non-Linearity (Relaxation)
         if training:
-            return torch.tanh(projected) # Differentiable approximation
+            # Tanh allows gradients to flow back to the encoders
+            return torch.tanh(projected) 
         else:
-            return torch.sign(projected) # Hard bits for security
+            # Sign creates the hard binary hash for the database
+            return torch.sign(projected)

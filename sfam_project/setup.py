@@ -7,7 +7,7 @@ long_description = (this_directory / "README.md").read_text(encoding="utf-8")
 
 setup(
     name="sfam-ADR",
-    version="1.1.8",  # <--- BUMPED TO 1.x.x TO FIX UPLOAD ERROR
+    version="1.2.0",  # <--- BUMPED TO 1.x.x TO FIX UPLOAD ERROR
     description="A neuro-symbolic, privacy-preserving biometric authentication engine.",
     
     # 2. This ensures your README.md shows up on PyPI
