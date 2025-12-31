@@ -1,25 +1,34 @@
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
-def contrastive_loss(embeddings, labels, margin=0.2):
+class BiometricTripletLoss(nn.Module):
     """
-    Pull same users together, push different users apart.
-    Margin 0.2 means: "Punish if impostors are > 20% similar"
+    Triplet Loss optimized for BioHashing.
+    Formula: max(0, dist(a, p) - dist(a, n) + margin)
+    
+    Uses Cosine Distance (1 - cos_sim) because SFAM outputs 
+    are normalized/tanh'd vectors.
     """
-    # Normalize
-    norm_emb = F.normalize(embeddings, p=2, dim=1)
-    
-    # Pairwise similarity
-    similarity = torch.matmul(norm_emb, norm_emb.T)
-    
-    # Label mask
-    labels = labels.unsqueeze(0)
-    mask = (labels == labels.T).float()
-    
-    # Positive Loss (Minimize distance for same user)
-    loss_pos = (1 - similarity) * mask
-    
-    # Negative Loss (Maximize distance for diff user up to margin)
-    loss_neg = torch.clamp(similarity - margin, min=0) * (1 - mask)
-    
-    return loss_pos.mean() + loss_neg.mean()
+    def __init__(self, margin=0.5):
+        super().__init__()
+        self.margin = margin
+
+    def cosine_distance(self, x1, x2):
+        # Returns distance between 0 (identical) and 2 (opposite)
+        return 1.0 - F.cosine_similarity(x1, x2)
+
+    def forward(self, anchor, positive, negative):
+        # 1. Distance between User A (Session 1) and User A (Session 2)
+        # Should be SMALL
+        dist_pos = self.cosine_distance(anchor, positive)
+        
+        # 2. Distance between User A and User B
+        # Should be LARGE
+        dist_neg = self.cosine_distance(anchor, negative)
+        
+        # 3. Compute Loss
+        # We want: dist_neg > dist_pos + margin
+        losses = torch.relu(dist_pos - dist_neg + self.margin)
+        
+        return losses.mean()
