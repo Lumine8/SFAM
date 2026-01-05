@@ -2,131 +2,159 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import hashlib
+import math
 
-# --- SMART IMPORT ---
-# This block handles the import regardless of whether you run this 
-# as a library (from sfam.models...) or as a script.
-try:
-    # Try relative import first (Best for package structure)
-    from .encoders import ImageEncoder, TemporalEncoder, TextEncoder
-except ImportError:
-    # Fallback to absolute import (If running script directly in folder)
-    from encoders import ImageEncoder, TemporalEncoder, TextEncoder
+# =====================================================
+# INTERNAL BUILDING BLOCKS (NOT PUBLIC API)
+# =====================================================
 
-# ==========================================
-# SFAM BASE CLASS
-# ==========================================
-
-class SFAM(nn.Module):
-    """ 
-    Base class containing the core BioHashing security logic. 
-    It imports the encoders instead of defining them here.
-    """
-    def __init__(self, behavioral_dim=6, secure_dim=256, noise_std=0.01):
+class GhostModule(nn.Module):
+    """Lightweight CNN block for efficient visual feature extraction"""
+    def __init__(self, inp, oup, kernel_size=1, ratio=2, dw_size=3, stride=1, relu=True):
         super().__init__()
-        self.noise_std = noise_std
-        self.secure_dim = secure_dim
-        
-        # 1. Instantiate Encoders (Imported from encoders.py)
-        self.image_encoder = ImageEncoder(embedding_dim=128)
-        self.behavior_encoder = TemporalEncoder(input_dim=behavioral_dim, embedding_dim=128)
-        
-        # 2. Fusion Layer
-        self.fusion = nn.Sequential(
-            nn.Linear(256, 512),
-            nn.Mish(),
-            nn.Linear(512, secure_dim) 
+        init_channels = math.ceil(oup / ratio)
+        new_channels = init_channels * (ratio - 1)
+
+        self.primary_conv = nn.Sequential(
+            nn.Conv2d(inp, init_channels, kernel_size, stride, kernel_size // 2, bias=False),
+            nn.BatchNorm2d(init_channels),
+            nn.ReLU(inplace=True) if relu else nn.Identity(),
         )
 
-    def extract_features(self, pattern_img, behavior_seq):
-        """Helper to get raw embeddings before fusion"""
-        spatial = self.image_encoder(pattern_img)       
-        behavioral = self.behavior_encoder(behavior_seq) 
-        return spatial, behavioral
+        self.cheap_operation = nn.Sequential(
+            nn.Conv2d(init_channels, new_channels, dw_size, 1, dw_size // 2,
+                      groups=init_channels, bias=False),
+            nn.BatchNorm2d(new_channels),
+            nn.ReLU(inplace=True) if relu else nn.Identity(),
+        )
 
-    def biohash(self, raw_emb, projection_matrices):
-        """
-        The 'Golden Master' BioHashing implementation.
-        """
-        projection_matrices = projection_matrices.detach()
-        
-        # Batch safety check
-        if raw_emb.shape[0] != projection_matrices.shape[0]:
-            if projection_matrices.shape[0] == 1:
-                projection_matrices = projection_matrices.expand(raw_emb.shape[0], -1, -1)
-            else:
-                raise ValueError(f"Batch mismatch: Emb {raw_emb.shape[0]} vs Key {projection_matrices.shape[0]}")
+        self.oup = oup
 
-        # Pre-Project Logic
-        features = torch.tanh(raw_emb)
-        features = F.normalize(features, p=2, dim=1) 
+    def forward(self, x):
+        x1 = self.primary_conv(x)
+        x2 = self.cheap_operation(x1)
+        out = torch.cat([x1, x2], dim=1)
+        return out[:, :self.oup, :, :]
 
-        # Privacy Noise (Training Only)
-        if self.training and self.noise_std > 0:
-            noise = self.noise_std * torch.randn_like(features)
-            features = features + noise
-            features = torch.clamp(features, -1.5, 1.5)
 
-        # Orthogonal Projection
-        hashed = torch.bmm(features.unsqueeze(1), projection_matrices).squeeze(1)
-        
-        return hashed
+class AdaptiveFusion(nn.Module):
+    """Attention-based fusion between visual and behavioral features"""
+    def __init__(self, visual_dim, behavior_dim, fusion_dim=256):
+        super().__init__()
+        self.vis_proj = nn.Linear(visual_dim, fusion_dim)
+        self.beh_proj = nn.Linear(behavior_dim, fusion_dim)
 
-# ==========================================
-# SFAM ADAPTIVE (The Logic Core)
-# ==========================================
-
-class SFAM_Adaptive(SFAM):
-    """
-    Adaptive SFAM: Dual-Modal with Attention Gating.
-    Dynamically weights Image vs. Behavior based on signal quality.
-    """
-    def __init__(self, behavioral_dim=6, secure_dim=256, noise_std=0.01):
-        super().__init__(behavioral_dim, secure_dim, noise_std)
-        
-        # Attention Mechanism (Input 256 -> Weights for 2 modalities)
-        self.attention_gate = nn.Sequential(
-            nn.Linear(256, 64),
+        self.attention = nn.Sequential(
+            nn.Linear(fusion_dim * 2, 64),
             nn.Tanh(),
-            nn.Linear(64, 2), 
+            nn.Linear(64, 2),
             nn.Softmax(dim=1)
         )
 
-    def forward(self, pattern_img, behavior_seq, projection_matrices, binarize=False):
-        # 1. Encode (Using imported encoders)
-        spatial, behavioral = self.extract_features(pattern_img, behavior_seq)
-        
-        # 2. Adaptive Weighting
-        context = torch.cat([spatial, behavioral], dim=1)
-        weights = self.attention_gate(context) # (B, 2)
-        
-        w_spatial = weights[:, 0].unsqueeze(1)
-        w_behavior = weights[:, 1].unsqueeze(1)
-        
-        # 3. Weighted Fusion
-        combined = torch.cat([spatial * w_spatial, behavioral * w_behavior], dim=1)
-        
-        # 4. Hash & Output
-        raw_emb = self.fusion(combined)
-        hashed = self.biohash(raw_emb, projection_matrices)
-        out = torch.tanh(hashed)
-        
+    def forward(self, visual, behavior):
+        v = self.vis_proj(visual)
+        b = self.beh_proj(behavior)
+
+        weights = self.attention(torch.cat([v, b], dim=1))
+        alpha_v = weights[:, 0].unsqueeze(1)
+        alpha_b = weights[:, 1].unsqueeze(1)
+
+        return alpha_v * v + alpha_b * b
+
+
+class BioHashProjection(nn.Module):
+    """User-specific orthogonal projection"""
+    def __init__(self, output_dim=256):
+        super().__init__()
+        self.output_dim = output_dim
+
+    def forward(self, features, user_key):
+        if user_key.dim() == 2:
+            user_key = user_key.unsqueeze(0)
+
+        projected = torch.bmm(features.unsqueeze(1), user_key).squeeze(1)
+        return projected
+
+
+# =====================================================
+# INTERNAL MODEL CORE (NOT IMPORTED DIRECTLY)
+# =====================================================
+
+class _SFAMAdaptiveCore(nn.Module):
+    def __init__(self, behavioral_dim=6, secure_dim=256):
+        super().__init__()
+
+        # Visual Encoder (GhostNet-style)
+        self.visual_encoder = nn.Sequential(
+            nn.Conv2d(3, 16, 3, 2, 1, bias=False),
+            nn.BatchNorm2d(16),
+            nn.ReLU(inplace=True),
+            GhostModule(16, 24),
+            nn.MaxPool2d(2),
+            GhostModule(24, 40),
+            nn.MaxPool2d(2),
+            GhostModule(40, 80),
+            nn.AdaptiveAvgPool2d((1, 1))
+        )
+        self.visual_dim = 80
+
+        # Behavioral Encoder (LSTM)
+        self.behavior_encoder = nn.LSTM(
+            input_size=behavioral_dim,
+            hidden_size=64,
+            num_layers=2,
+            batch_first=True
+        )
+        self.behavior_dim = 64
+
+        # Fusion + Projection
+        self.fusion = AdaptiveFusion(self.visual_dim, self.behavior_dim, fusion_dim=256)
+        self.biohash = BioHashProjection(output_dim=secure_dim)
+
+    def forward(self, images, motion_seq, user_keys, binarize=False):
+        # Visual features
+        v = self.visual_encoder(images).view(images.size(0), -1)
+
+        # Behavioral features
+        _, (h_n, _) = self.behavior_encoder(motion_seq)
+        b = h_n[-1]
+
+        # Adaptive fusion
+        fused = self.fusion(v, b)
+
+        # Secure projection
+        hashed = self.biohash(fused, user_keys)
+        out = F.normalize(hashed, p=2, dim=1)
+
         if binarize:
             return torch.sign(out)
         return out
 
-# ==========================================
-# HELPER: Key Generator
-# ==========================================
+
+# =====================================================
+# PUBLIC API (WHAT USERS IMPORT)
+# =====================================================
+
+def SFAM_Adaptive(behavioral_dim=6, secure_dim=256):
+    """
+    Factory function that returns an Adaptive SFAM model.
+
+    This avoids class import conflicts and keeps a clean public API.
+    """
+    return _SFAMAdaptiveCore(
+        behavioral_dim=behavioral_dim,
+        secure_dim=secure_dim
+    )
+
 
 def generate_user_key(user_seed, salt, dim=256):
-    raw_str = f"{user_seed}_{salt}".encode('utf-8')
-    seed_hash = hashlib.sha256(raw_str).hexdigest()
-    final_seed = int(seed_hash, 16) % (2**32)
-    
-    rng = torch.Generator()
-    rng.manual_seed(final_seed)
-    
-    W = torch.randn(dim, dim, generator=rng)
-    Q, R = torch.linalg.qr(W)
+    """Deterministic orthogonal user-specific key"""
+    raw = f"{user_seed}_{salt}".encode("utf-8")
+    seed = int(hashlib.sha256(raw).hexdigest(), 16) % (2**32)
+
+    g = torch.Generator()
+    g.manual_seed(seed)
+
+    W = torch.randn(dim, dim, generator=g)
+    Q, _ = torch.linalg.qr(W)
     return Q
