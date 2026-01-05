@@ -18,7 +18,7 @@ SFAM-ADR combines:
 
 ---
 
-## 🚀 What's New in v1.2.2?
+## 🚀 What's New in v1.2.3?
 
 - **Adaptive Fusion:** New `SFAM_Adaptive` model that dynamically weights Face vs. Behavior inputs based on signal quality (Attention Gating).
 - **Modular Architecture:** Separated `ImageEncoder` and `TemporalEncoder` for cleaner integration.
