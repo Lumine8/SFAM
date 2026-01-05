@@ -12,19 +12,17 @@ It transforms human interaction data (images, mouse gestures, touch patterns) in
 
 SFAM-ADR combines:
 
-- **GhostNet** for efficient spatial feature abstraction
-- **Differential Physics** (Velocity, Acceleration, Jerk) for behavioral dynamics
-- **Seed-based secure projection** for cancellable biometric identity
+- **GhostNet & Attention** for adaptive spatial feature abstraction.
+- **Differential Physics** (Velocity, Acceleration, Jerk) for behavioral dynamics.
+- **Cancelable Biometrics** via seed-based orthogonal projection.
 
 ---
 
-## 🚀 What's New in v1.1.0?
+## 🚀 What's New in v1.2.2?
 
-We have introduced **Feature Managers** to handle raw data inputs directly:
-
-- **`image_fm`**: Automatically converts images to spatial tensors.
-- **`gesture_fm`**: Converts raw coordinate lists (x, y, time) into physics-based behavioral tensors.
-- **Simplified Imports**: Access everything directly from the `sfam` namespace.
+- **Adaptive Fusion:** New `SFAM_Adaptive` model that dynamically weights Face vs. Behavior inputs based on signal quality (Attention Gating).
+- **Modular Architecture:** Separated `ImageEncoder` and `TemporalEncoder` for cleaner integration.
+- **Simplified Imports:** Access everything directly from the `sfam` namespace.
 
 ---
 
@@ -37,7 +35,7 @@ pip install sfam-ADR
 
 ```
 
-> **Note:** Requires **PyTorch 2.0+**
+> **Note:** Requires **PyTorch 2.0+** and **timm**
 
 ---
 
@@ -45,27 +43,25 @@ pip install sfam-ADR
 
 ### 1️⃣ Import & Initialize
 
-You can now import the engine and feature managers directly.
-
-Python
+You can now import the Adaptive Engine and feature managers directly.
 
 ```
 import torch
-from sfam import SFAM, image_fm, gesture_fm
+from sfam import SFAM_Adaptive, image_fm, gesture_fm
 
-# Initialize the Engine
+# Initialize the Adaptive Engine
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-model = SFAM(
+model = SFAM_Adaptive(
     behavioral_dim=64,  # Matches the output of gesture_fm
     secure_dim=256      # Size of the final hash
 ).to(device).eval()
 
-print(f"🚀 SFAM Engine loaded on {device}")
+print(f"🚀 SFAM Adaptive Engine loaded on {device}")
 
 ```
 
-### 2️⃣ Process Raw Inputs (New in v1.1.0)
+### 2️⃣ Process Raw Inputs
 
 Instead of manually creating tensors, use the built-in processors.
 
@@ -75,7 +71,8 @@ Python
 
 ```
 # Automatically resizes, normalizes, and batches the image
-spatial_features = image_fm.processor.process("user_face.jpg").to(device)
+# Returns tensor shape: (1, 3, 224, 224)
+spatial_input = image_fm.processor.process("user_face.jpg").to(device)
 
 ```
 
@@ -95,25 +92,30 @@ raw_data = [
 ]
 
 # Calculates Velocity, Acceleration, and Jerk automatically
-behavioral_features = gesture_fm.processor.process(raw_data).to(device)
+# Returns tensor shape: (1, Seq_Len, 6)
+behavioral_input = gesture_fm.processor.process(raw_data).to(device)
 
 ```
 
 ### 3️⃣ Generate the Secure Hash
 
-Pass the processed features and a user-specific seed to generate the cancellable identity.
-
-Python
+Pass the processed inputs and a user-specific key matrix to generate the cancellable identity.
 
 ```
-# User-specific secret seed (can be rotated if compromised)
-user_seed = 12345
+from sfam.models.sfam_net import generate_user_key
 
+# 1. Generate a Revocable Key (Salt + User ID)
+# If this key is lost/stolen, you just change the salt!
+user_key = generate_user_key("user_123", "salt_v1", dim=256).to(device)
+
+# 2. Run Inference
 with torch.no_grad():
+    # The model fuses the inputs and projects them onto the user key
     secure_hash = model(
-        spatial_features,
-        behavioral_features,
-        user_seed
+        spatial_input,
+        behavioral_input,
+        user_key,       # The secret projection matrix
+        binarize=True   # Returns +1/-1 for Hamming Distance
     )
 
 print(f"🔒 Secure Hash Generated: {secure_hash.shape}")
@@ -121,7 +123,7 @@ print(f"🔒 Secure Hash Generated: {secure_hash.shape}")
 
 ```
 
-**Only the `secure_hash` is stored. The raw image and gesture data are discarded.**
+**Only the `secure_hash` is stored. The raw image and gesture data are discarded immediately.**
 
 ---
 
@@ -133,28 +135,27 @@ Raw input data is never stored. Instead, SFAM-ADR produces **non-invertible abst
 
 ### 🔄 Cancellable Biometrics
 
-Each user identity is generated using a **seed-based projection**. Rotating the seed instantly invalidates old biometric hashes, bringing password-like revocability to biometrics.
+Each user identity is generated using a **seed-based projection** (BioHashing). Rotating the seed instantly invalidates old biometric hashes, bringing password-like revocability to biometrics.
 
-### ⚡ Differential Physics
+### ⚡ Adaptive Fusion
 
-For behavioral data, `sfam-ADR` uses differential physics to analyze **how** a user moves, not just **where**.
+Unlike static fusion models, `SFAM_Adaptive` uses an **Attention Mechanism** to decide which modality is more trustworthy in real-time.
 
-- **Velocity:** Speed of movement.
-- **Acceleration:** Force and intent.
-- **Jerk:** Smoothness and neuromuscular control.
+- _Camera blocked?_ The model relies more on **Motion**.
+- _Hand jittery?_ The model relies more on **Face**.
 
 ---
 
 ## 🧪 What SFAM-ADR Is (and Is Not)
 
-| Aspect              | Description                                   |
-| :------------------ | :-------------------------------------------- |
-| **Learning Type**   | Feature abstraction / representation learning |
-| **Classification**  | ❌ Not a classifier (No Softmax)              |
-| **Reconstruction**  | ❌ Not possible (Irreversible)                |
-| **Labels Required** | ❌ No (Unsupervised-ready)                    |
-| **Output**          | Secure, irreversible biometric hash           |
-| **Revocability**    | ✅ Yes (Seed rotation)                        |
+| Aspect             | Description                                   |
+| :----------------- | :-------------------------------------------- |
+| **Learning Type**  | Feature abstraction / representation learning |
+| **Classification** | ❌ Not a classifier (No Softmax / Classes)    |
+| **Reconstruction** | ❌ Not possible (Irreversible)                |
+| **Fusion Type**    | ✅ Adaptive (Attention-based weighting)       |
+| **Output**         | Secure, irreversible biometric hash           |
+| **Revocability**   | ✅ Yes (Key/Salt rotation)                    |
 
 ---
 
