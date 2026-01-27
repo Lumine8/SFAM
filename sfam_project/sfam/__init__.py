@@ -2,7 +2,7 @@
 # Core Engines
 # ==========================================
 # This import is critical, so we leave it outside the try-except
-from .models.sfam_net import SFAM, SFAM_Adaptive, generate_user_key
+from .models.sfam_net import SFAM_Adaptive, generate_user_key
 
 # ==========================================
 # Feature Managers (Optional Load)
@@ -23,7 +23,8 @@ __all__ = [
     "gesture_fm",
 ]
 
-__version__ = "1.2.6"
+__version__ = "1.2.7"
+__maintainer__ = "lumine8"
 __author__ = "lumine8"
 __license__ = "MIT" 
 __copyright__ = "Copyright 2025 Lumine8"
