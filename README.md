@@ -167,13 +167,6 @@ For behavioral data, `sfam-ADR` uses differential physics to analyze **how** a u
 
 ---
 
-## 👥 Contributors
-
-- **Lumine8** — Core architecture, modeling, implementation
-- **miss_anonymous** — Conceptual support, validation, documentation
-
----
-
 ## 📄 License
 
 This project is licensed under the **MIT License** — see the LICENSE file for details.
