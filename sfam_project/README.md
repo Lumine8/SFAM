@@ -28,38 +28,7 @@ SFAM-ADR combines:
 
 ## 📦 Installation
 
-Install directly from PyPI:
-
-```bash
-pip install sfam-ADR
-
-```
-
-> **Note:** Requires **PyTorch 2.0+** and **timm**
-
----
-
-## 🛠 Usage
-
-### 1️⃣ Import & Initialize
-
-You can now import the Adaptive Engine and feature managers directly.
-
-```
-import torch
-from sfam import SFAM_Adaptive, image_fm, gesture_fm
-
-# Initialize the Adaptive Engine
-device = "cuda" if torch.cuda.is_available() else "cpu"
-
-model = SFAM_Adaptive(
-    behavioral_dim=64,  # Matches the output of gesture_fm
-    secure_dim=256      # Size of the final hash
-).to(device).eval()
-
-print(f"🚀 SFAM Adaptive Engine loaded on {device}")
-
-```
+### installation currently unavailable
 
 ### 2️⃣ Process Raw Inputs
 
